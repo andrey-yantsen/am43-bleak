@@ -28,7 +28,7 @@ target-version = ["py39"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-bleak = "^0.19.2"
+bleak = "^0.20.0"
 bleak-retry-connector = "^2.13.0"
 home-assistant-bluetooth = "^1.6.0"
 construct = "^2.10.67"
