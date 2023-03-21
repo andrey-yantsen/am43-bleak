@@ -28,7 +28,7 @@ target-version = ["py39"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-bleak = "^0.19.2"
+bleak = "^0.20.0"
 bleak-retry-connector = "^2.13.0"
 home-assistant-bluetooth = "^1.6.0"
 construct = "^2.10.67"
@@ -38,8 +38,8 @@ construct-typing = "^0.5.5"
 black = "^23.1.0"
 isort = "^5.12.0"
 pytest = "^7.0"
-pytest-cov = "^3.0"
-pytest-asyncio = "^0.20.0"
+pytest-cov = "^4.0"
+pytest-asyncio = "^0.21.0"
 
 [build-system]
 requires = ["poetry-core"]
