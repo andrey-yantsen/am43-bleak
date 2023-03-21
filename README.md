@@ -5,6 +5,10 @@
 Python library for controlling blind motors, build on top of A-OK AM43.
 This blinds are distributed by Zemismart, Moes and probably other resellers.
 
+In general, the device looks like this:
+
+![image](https://user-images.githubusercontent.com/629281/226755076-cfbfc160-7ca9-4302-b921-e3710e8b038c.png)
+
 ## Current project status and todo
 
 - [ ] Protocol
