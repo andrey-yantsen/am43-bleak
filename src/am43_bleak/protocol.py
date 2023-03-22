@@ -272,7 +272,8 @@ class Timer(DataclassMixin):
 
 @dataclass
 class UpdateTimer(DataclassMixin):
-    timer_id: int = csfield(Int8ub)
+    # Max 4 timers per device
+    timer_id: int = csfield(ExprValidator(Int8ub, 0 <= obj_ <= 3))
     action: UpdateTimerAction = csfield(TEnum(Int8ub, UpdateTimerAction))
     timer: Timer = csfield(DataclassStruct(Timer))
 
@@ -369,6 +370,46 @@ class UpdateSeason(DataclassMixin):
     season: Season = csfield(DataclassBitStruct(Season))
 
 
+class CommonFields:
+    header: bytes = csfield(Hex(Const(b"\x9A")))
+    message_size: int = csfield(
+        Rebuild(
+            Int8ub,
+            lambda ctx: len(
+                DataclassStruct(ctx.message.__class__).build(ctx.message)
+                if isinstance(ctx.message, DataclassMixin)
+                else ctx.message
+            ),
+        )
+    )
+    message: Any = lambda map: csfield(
+        Switch(
+            this.message_type,
+            map,
+            default=HexDump(Bytes(this.message_size)),
+        )
+    )
+    footer: bytes = csfield(
+        Switch(
+            lambda ctx: isinstance(ctx.payload["value"].message, OperationResult),
+            {
+                True: Switch(
+                    lambda ctx: ctx.payload["value"].message.result,
+                    {
+                        ContentOperationResult.SUCCESS: Hex(Const(b"\x31")),
+                        ContentOperationResult.FAILURE: Hex(Const(b"\xCE")),
+                    },
+                ),
+            },
+            Checksum(
+                Int8ub,
+                xor_checksum,
+                this.payload.data,
+            ),
+        )
+    )
+
+
 @dataclass
 class ResponsePayload(DataclassMixin):
     MESSAGE_TYPE_MAP = {
@@ -390,45 +431,16 @@ class ResponsePayload(DataclassMixin):
         ResponseMessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
     }
 
-    header: bytes = csfield(Hex(Const(b"\x9A")))
+    header: bytes = CommonFields.header
     message_type: ResponseMessageType = csfield(TEnum(Int8ub, ResponseMessageType))
-    message_size: int = csfield(
-        Rebuild(
-            Int8ub,
-            lambda ctx: len(
-                DataclassStruct(ctx.message.__class__).build(ctx.message)
-                if isinstance(ctx.message, DataclassMixin)
-                else ctx.message
-            ),
-        )
-    )
-    message: Any = csfield(
-        RawCopy(
-            Switch(
-                this.message_type,
-                MESSAGE_TYPE_MAP,
-                default=HexDump(Bytes(this.message_size)),
-            )
-        )
-    )
+    message_size: int = CommonFields.message_size
+    message: Any = CommonFields.message(MESSAGE_TYPE_MAP)
 
 
 @dataclass
 class Response(DataclassMixin):
     payload: ResponsePayload = csfield(RawCopy(DataclassStruct(ResponsePayload)))
-    footer: Any = csfield(
-        Select(
-            success=Hex(Const(b"\x31")),
-            failure=Hex(Const(b"\xCE")),
-            checksum=Hex(
-                Checksum(
-                    Int8ub,
-                    xor_checksum,
-                    this.payload.data,
-                )
-            ),
-        )
-    )
+    footer: Any = CommonFields.footer
 
 
 @dataclass
@@ -449,27 +461,10 @@ class RequestPayload(DataclassMixin):
         RequestMessageType.UPDATE_SETTINGS: DataclassBitStruct(UpdateSettings),
     }
 
-    header: bytes = csfield(Hex(Const(b"\x9A")))
+    header: bytes = CommonFields.header
     message_type: RequestMessageType = csfield(TEnum(Int8ub, RequestMessageType))
-    message_size: int = csfield(
-        Rebuild(
-            Int8ub,
-            lambda ctx: len(
-                DataclassStruct(ctx.message.__class__).build(ctx.message)
-                if isinstance(ctx.message, DataclassMixin)
-                else ctx.message
-            ),
-        )
-    )
-    message: Any = csfield(
-        RawCopy(
-            Switch(
-                this.message_type,
-                MESSAGE_TYPE_MAP,
-                default=HexDump(Bytes(this.message_size)),
-            )
-        )
-    )
+    message_size: int = CommonFields.message_size
+    message: Any = CommonFields.message(MESSAGE_TYPE_MAP)
 
 
 @dataclass
@@ -477,12 +472,35 @@ class Request(DataclassMixin):
     # Tag should be excluded from the checksum calculation
     tag: bytes = csfield(Hex(Const(b"\x00\xFF\x00\x00")))
     payload: RequestPayload = csfield(RawCopy(DataclassStruct(RequestPayload)))
-    footer: int = csfield(
-        Hex(
-            Checksum(
-                Int8ub,
-                xor_checksum,
-                this.payload.data,
+    footer: int = CommonFields.footer
+
+    def prepare(
+        message_type: RequestMessageType = None,
+        payload: RequestPayload = None,
+        message: Any = None,
+        **kwargs,
+    ) -> "Request":
+        if payload is None:
+            if message_type is None:
+                raise ValueError(
+                    "You must provide either payload, or message_type and message"
+                )
+
+            klass = RequestPayload.MESSAGE_TYPE_MAP[message_type]
+            if message is not None:
+                if not isinstance(message, klass.dc_type):
+                    raise ValueError(
+                        "Message must be an instance of " + klass.dc_type.__class__
+                    )
+
+                payload = RequestPayload(message_type=message_type, message=message)
+            else:
+                payload = RequestPayload(
+                    message_type=message_type, message=klass.dc_type(**kwargs)
+                )
+        elif message_type is not None or message is not None:
+            raise ValueError(
+                "When payload is provided, message_type and message must be omited"
             )
-        ),
-    )
+
+        return Request(payload={"value": payload})
