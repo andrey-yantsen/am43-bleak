@@ -17,20 +17,18 @@ packages = [{include = "am43_bleak", from = "src"}]
 [tool.isort]
 profile = "black"
 force_sort_within_sections = true
-known_first_party = [
-    "am43_bleak",
-]
+known_first_party = ["am43_bleak", "tests"]
 forced_separate = []
 combine_as_imports = true
 
 [tool.black]
-target-version = ["py39"]
+target-version = ["py310"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 bleak = "^0.20.0"
-bleak-retry-connector = "^2.13.0"
-home-assistant-bluetooth = "^1.6.0"
+bleak-retry-connector = "^3.0.1"
+home-assistant-bluetooth = "^1.9.3"
 construct = "^2.10.67"
 construct-typing = "^0.5.5"
 
