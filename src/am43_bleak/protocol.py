@@ -199,7 +199,7 @@ class DeviceDiameter(EnumBase):
 
 @dataclass
 class SettingsResponse(DataclassMixin):
-    reserved: int = csfield(Hex(BitsInteger(3)))
+    _reserved1: int = csfield(Hex(BitsInteger(3)))
     has_light_device: bool = csfield(Flag)
     bottom_limit_is_ok: bool = csfield(Flag)
     top_limit_is_ok: bool = csfield(Flag)
@@ -210,18 +210,18 @@ class SettingsResponse(DataclassMixin):
     length: int = csfield(BitsInteger(16))
     wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
-    reserved2: int = csfield(Hex(BitsInteger(4)))
+    _reserved2: int = csfield(Hex(BitsInteger(4)))
 
 
 @dataclass
 class UpdateSettings(DataclassMixin):
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
-    reserved1: int = csfield(Hex(BitsInteger(1)))
+    _reserved1: int = csfield(Hex(BitsInteger(1)))
     buttons_mode: int = csfield(TEnum(BitsInteger(1), ButtonsMode))
     direction: Direction = csfield(TEnum(BitsInteger(1), Direction))
-    reserved2: int = csfield(Hex(BitsInteger(1)))
+    _reserved2: int = csfield(Hex(BitsInteger(1)))
     speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
-    reserved3: int = csfield(Hex(BitsInteger(8)))
+    _reserved3: int = csfield(Hex(BitsInteger(8)))
     length: int = csfield(BitsInteger(16))
     wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
 
@@ -309,9 +309,9 @@ class Password(DataclassMixin):
 
 @dataclass
 class FinishedMoving(DataclassMixin):
-    reserved1: int = csfield(Hex(Bytes(1)))
+    _reserved1: int = csfield(Hex(Bytes(1)))
     position: int = csfield(Int8ub)
-    reserved2: int = csfield(Hex(Bytes(2)))
+    _reserved2: int = csfield(Hex(Bytes(2)))
 
 
 @dataclass
@@ -334,7 +334,7 @@ class SeasonLightLevel(EnumBase):
 @dataclass
 class Season(DataclassMixin):
     season_id: int = csfield(BitsInteger(8))
-    reserved: int = csfield(Default(BitsInteger(7), 0))
+    _reserved1: int = csfield(Default(BitsInteger(7), 0))
     is_enabled: bool = csfield(Flag)
     light_switch_state: SeasonLightSwitchState = csfield(
         TEnum(BitsInteger(8), SeasonLightSwitchState)
