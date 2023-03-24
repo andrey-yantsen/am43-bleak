@@ -205,12 +205,10 @@ class SettingsResponse(DataclassMixin):
     top_limit_is_ok: bool = csfield(Flag)
     buttons_mode: int = csfield(TEnum(BitsInteger(1), ButtonsMode))
     direction: Direction = csfield(TEnum(BitsInteger(1), Direction))
-    device_speed: int = csfield(
-        ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50)
-    )
-    device_percent_position: int = csfield(BitsInteger(8))
-    device_length: int = csfield(BitsInteger(16))
-    device_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
+    speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
+    current_position: int = csfield(BitsInteger(8))
+    length: int = csfield(BitsInteger(16))
+    wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
     reserved2: int = csfield(Hex(BitsInteger(4)))
 
@@ -222,12 +220,10 @@ class UpdateSettings(DataclassMixin):
     buttons_mode: int = csfield(TEnum(BitsInteger(1), ButtonsMode))
     direction: Direction = csfield(TEnum(BitsInteger(1), Direction))
     reserved2: int = csfield(Hex(BitsInteger(1)))
-    device_speed: int = csfield(
-        ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50)
-    )
+    speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
     reserved3: int = csfield(Hex(BitsInteger(8)))
-    device_length: int = csfield(BitsInteger(16))
-    device_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
+    length: int = csfield(BitsInteger(16))
+    wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
 
 
 class TimerRepeat(FlagsEnumBase):
