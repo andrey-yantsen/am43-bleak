@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, tzinfo
 from typing import Any
 
 from construct import (
@@ -141,13 +142,28 @@ class LimitOrReset(DataclassMixin):
     )
 
 
+class DayOfWeek(EnumBase):
+    MONDAY = 1
+    TUESDAY = 2
+    WEDNESDAY = 3
+    THURSDAY = 4
+    FRIDAY = 5
+    SATURDAY = 6
+    SUNDAY = 0
+
+
 @dataclass
 class UpdateDeviceTime(DataclassMixin):
-    # Day of the week, where 0 is Sunday and 6 is Saturday
-    day_of_week: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 6))
+    day_of_week: DayOfWeek = csfield(TEnum(Int8ub, DayOfWeek))
     hour: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 23))
     minute: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 59))
     second: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 59))
+
+    def now(tz: tzinfo = None) -> "UpdateDeviceTime":
+        now = datetime.now(tz)
+        return UpdateDeviceTime(
+            (now.weekday + 1) % 7, hour=now.hour, minute=now.minute, second=now.second
+        )
 
 
 @dataclass
