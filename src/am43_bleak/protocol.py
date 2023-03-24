@@ -112,14 +112,6 @@ class UpdateTimerAction(EnumBase):
     DELETE = 1
 
 
-def xor_checksum(data: bytearray) -> int:
-    checksum = 0
-    for byte in data:
-        checksum = checksum ^ byte
-
-    return checksum
-
-
 class LimitCommand(EnumBase):
     INIT = 0x00
     SAVE = 0x20
@@ -160,7 +152,7 @@ class UpdateDeviceTime(DataclassMixin):
 
 @dataclass
 class AlwaysOne(DataclassMixin):
-    body: int = csfield(Const(b"\x01"))
+    _body: int = csfield(Const(b"\x01"))
 
 
 @dataclass
@@ -264,7 +256,7 @@ class UpdateTimer(DataclassMixin):
 @dataclass
 class ListTimersResponse(DataclassMixin):
     timers: list[Timer] = csfield(
-        Array(lambda this: int(this._.message_size / 5), DataclassStruct(Timer))
+        Array(lambda this: int(this._._message_size / 5), DataclassStruct(Timer))
     )
 
 
@@ -276,7 +268,7 @@ class IlluminanceLevel(DataclassMixin):
 
 @dataclass
 class UpdateName(DataclassMixin):
-    new_name: str = csfield(PaddedString(this._.message_size, "utf8"))
+    new_name: str = csfield(PaddedString(this._._message_size, "utf8"))
 
 
 @dataclass
@@ -395,9 +387,9 @@ class Payload(DataclassMixin):
         MessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
     }
 
-    header: bytes = csfield(Hex(Const(b"\x9A")))
+    _header: bytes = csfield(Hex(Const(b"\x9A")))
     message_type: MessageType = csfield(TEnum(Int8ub, MessageType))
-    message_size: int = csfield(
+    _message_size: int = csfield(
         Rebuild(
             Int8ub,
             lambda ctx: len(
@@ -414,12 +406,12 @@ class Payload(DataclassMixin):
                 True: Switch(
                     this.message_type,
                     RESPONSE_MESSAGE_TYPE_MAP,
-                    HexDump(Bytes(this.message_size)),
+                    HexDump(Bytes(this._message_size)),
                 ),
                 False: Switch(
                     this.message_type,
                     REQUEST_MESSAGE_TYPE_MAP,
-                    HexDump(Bytes(this.message_size)),
+                    HexDump(Bytes(this._message_size)),
                 ),
             },
         )
@@ -428,6 +420,14 @@ class Payload(DataclassMixin):
 
 # Tag present only in client->device messages
 CLIENT_MESSAGE_TAG = b"\x00\xFF\x00\x00"
+
+
+def xor_checksum(data: bytearray) -> int:
+    checksum = 0
+    for byte in data:
+        checksum = checksum ^ byte
+
+    return checksum
 
 
 @dataclass
@@ -443,7 +443,7 @@ class Message(DataclassMixin):
     )
     _payload: Payload = csfield(RawCopy(DataclassStruct(Payload)))
     payload: Payload = csfield(Computed(this._payload["value"]))
-    footer: int = csfield(
+    _footer: int = csfield(
         Switch(
             lambda ctx: isinstance(ctx._payload["value"].message, OperationResult),
             {
