@@ -15,6 +15,7 @@ from construct import (
     HexDump,
     Int8ub,
     Int16ub,
+    Optional,
     PaddedString,
     RawCopy,
     Rebuild,
@@ -36,43 +37,25 @@ from construct_typed import (
 )
 
 
-# TODO:
-# Some AM43 responses expect a confirmation from the client (0xA1, 0xA3, 0xA6 and 0xA2).
-# Those responses must be formatted in the same way OperationResult is formatted
-# i.e. using values from ContentOperationResult instead of the checksum in the footer.
-class RequestMessageType(EnumBase):
-    LIMIT_OR_RESET = 0x22
-    SEND_TIME = 0x14
-    UPDATE_TIMER = 0x15
-    UPDATE_SEASON = 0x16
+class MessageType(EnumBase):
     PASSWORD = 0x17
-    PASSWORD_CHANGE = 0x18
-    CONTROL_DIRECT = 0x0A
-    CONTROL_PERCENT = 0x0D
-    UPDATE_SETTINGS = 0x11
     REQUEST_BATTERY_STATUS = 0xA2
     REQUEST_SETTINGS = 0xA7
+    UPDATE_DEVICE_TIME = 0x14
+
+    CONTROL_DIRECT = 0x0A
+    CONTROL_POSITION = 0x0D
+
     REQUEST_ILLUMINANCE = 0xAA
-    CHANGE_NAME = 0x35
-
-
-class ResponseMessageType(EnumBase):
-    # Everything from RequestMessageType
-    LIMIT_OR_RESET = 0x22
-    SEND_TIME = 0x14
+    UPDATE_SETTINGS = 0x11
     UPDATE_TIMER = 0x15
     UPDATE_SEASON = 0x16
-    PASSWORD = 0x17
+    UPDATE_NAME = 0x35
     PASSWORD_CHANGE = 0x18
-    CONTROL_DIRECT = 0x0A
-    CONTROL_PERCENT = 0x0D
-    UPDATE_SETTINGS = 0x11
-    REQUEST_BATTERY_STATUS = 0xA2
-    REQUEST_SETTINGS = 0xA7
-    REQUEST_ILLUMINANCE = 0xAA
-    CHANGE_NAME = 0x35
 
-    # Some extra message types
+    LIMIT_OR_RESET = 0x22  # TODO: Reset not tested / covered
+
+    # Device notifications
     FINISHED_MOVING = 0xA1
     SPEED = 0xA3  # TODO: not implemented
     FAULT = 0xA6  # TODO: not implemented
@@ -100,9 +83,9 @@ class SeasonLightSwitchState(EnumBase):
 
 class ContentLimitSet(EnumBase):
     INIT_SUCCESS = 0x5A
-    SUCCESS = 0x5B
-    EXIT = 0x5C
     TIMEOUT = 0xA5
+    EXIT = 0x5C
+    SUCCESS = 0x5B
     FAILURE = 0xB5
 
 
@@ -167,7 +150,7 @@ class LimitOrReset(DataclassMixin):
 
 
 @dataclass
-class SendTime(DataclassMixin):
+class UpdateDeviceTime(DataclassMixin):
     # Day of the week, where 0 is Sunday and 6 is Saturday
     day_of_week: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 6))
     hour: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 23))
@@ -186,7 +169,7 @@ class DirectControl(DataclassMixin):
 
 
 @dataclass
-class PercentControl(DataclassMixin):
+class PositionControl(DataclassMixin):
     position: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 100))
 
 
@@ -279,7 +262,7 @@ class UpdateTimer(DataclassMixin):
 
 
 @dataclass
-class FindTiming(DataclassMixin):
+class ListTimersResponse(DataclassMixin):
     timers: list[Timer] = csfield(
         Array(lambda this: int(this._.message_size / 5), DataclassStruct(Timer))
     )
@@ -292,20 +275,25 @@ class IlluminanceLevel(DataclassMixin):
 
 
 @dataclass
-class ChangeName(DataclassMixin):
+class UpdateName(DataclassMixin):
     new_name: str = csfield(PaddedString(this._.message_size, "utf8"))
 
 
 @dataclass
 class OperationResult(DataclassMixin):
-    result: int = csfield(TEnum(Int8ub, ContentOperationResult))
-    is_success: bool = csfield(
-        Computed(lambda ctx: ctx.result == ContentOperationResult.SUCCESS)
+    _result: int = csfield(
+        Hex(
+            Select(
+                Const(b"\x5A"),
+                Const(b"\xA5"),
+            )
+        )
     )
+    is_success: bool = csfield(Computed(lambda ctx: ctx._result == b"\x5A"))
 
 
 @dataclass
-class Battery(DataclassMixin):
+class BatteryStatusResponse(DataclassMixin):
     unknown: int = csfield(Hex(Bytes(4)))  # looks like unused and always 0x00000000
     level: int = csfield(Int8ub)
 
@@ -323,7 +311,7 @@ class FinishedMoving(DataclassMixin):
 
 
 @dataclass
-class LimitOrResetResult(DataclassMixin):
+class LimitOrResetResponse(DataclassMixin):
     result: int = csfield(TEnum(Int8ub, ContentLimitSet))
 
 
@@ -360,7 +348,7 @@ class Season(DataclassMixin):
 
 
 @dataclass
-class Seasons(DataclassMixin):
+class ListSeasonsResponse(DataclassMixin):
     summer: Season = csfield(DataclassBitStruct(Season))
     winter: Season = csfield(DataclassBitStruct(Season))
 
@@ -370,8 +358,45 @@ class UpdateSeason(DataclassMixin):
     season: Season = csfield(DataclassBitStruct(Season))
 
 
-class CommonFields:
+@dataclass
+class Payload(DataclassMixin):
+    REQUEST_MESSAGE_TYPE_MAP = {
+        MessageType.PASSWORD: DataclassStruct(Password),
+        MessageType.PASSWORD_CHANGE: DataclassStruct(Password),
+        MessageType.UPDATE_NAME: DataclassStruct(UpdateName),
+        MessageType.CONTROL_DIRECT: DataclassStruct(DirectControl),
+        MessageType.UPDATE_DEVICE_TIME: DataclassStruct(UpdateDeviceTime),
+        MessageType.REQUEST_SETTINGS: DataclassStruct(AlwaysOne),
+        MessageType.REQUEST_BATTERY_STATUS: DataclassStruct(AlwaysOne),
+        MessageType.REQUEST_ILLUMINANCE: DataclassStruct(AlwaysOne),
+        MessageType.UPDATE_TIMER: DataclassStruct(UpdateTimer),
+        MessageType.CONTROL_POSITION: DataclassStruct(PositionControl),
+        MessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
+        MessageType.UPDATE_SEASON: DataclassStruct(UpdateSeason),
+        MessageType.UPDATE_SETTINGS: DataclassBitStruct(UpdateSettings),
+    }
+
+    RESPONSE_MESSAGE_TYPE_MAP = {
+        MessageType.REQUEST_BATTERY_STATUS: DataclassStruct(BatteryStatusResponse),
+        MessageType.UPDATE_NAME: DataclassStruct(OperationResult),
+        MessageType.PASSWORD_CHANGE: DataclassStruct(OperationResult),
+        MessageType.PASSWORD: DataclassStruct(OperationResult),
+        MessageType.CONTROL_DIRECT: DataclassStruct(OperationResult),
+        MessageType.CONTROL_POSITION: DataclassStruct(OperationResult),
+        MessageType.UPDATE_DEVICE_TIME: DataclassStruct(OperationResult),
+        MessageType.REQUEST_SETTINGS: DataclassBitStruct(SettingsResponse),
+        MessageType.LIST_TIMERS: DataclassStruct(ListTimersResponse),
+        MessageType.UPDATE_TIMER: DataclassStruct(OperationResult),
+        MessageType.REQUEST_ILLUMINANCE: DataclassStruct(IlluminanceLevel),
+        MessageType.FINISHED_MOVING: DataclassStruct(FinishedMoving),
+        MessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrResetResponse),
+        MessageType.LIST_SEASONS: DataclassStruct(ListSeasonsResponse),
+        MessageType.UPDATE_SEASON: DataclassStruct(OperationResult),
+        MessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
+    }
+
     header: bytes = csfield(Hex(Const(b"\x9A")))
+    message_type: MessageType = csfield(TEnum(Int8ub, MessageType))
     message_size: int = csfield(
         Rebuild(
             Int8ub,
@@ -382,125 +407,105 @@ class CommonFields:
             ),
         )
     )
-    message: Any = lambda map: csfield(
+    message: Any = csfield(
         Switch(
-            this.message_type,
-            map,
-            default=HexDump(Bytes(this.message_size)),
-        )
-    )
-    footer: bytes = csfield(
-        Switch(
-            lambda ctx: isinstance(ctx.payload["value"].message, OperationResult),
+            lambda ctx: ctx._.is_device_response,
             {
                 True: Switch(
-                    lambda ctx: ctx.payload["value"].message.result,
+                    this.message_type,
+                    RESPONSE_MESSAGE_TYPE_MAP,
+                    HexDump(Bytes(this.message_size)),
+                ),
+                False: Switch(
+                    this.message_type,
+                    REQUEST_MESSAGE_TYPE_MAP,
+                    HexDump(Bytes(this.message_size)),
+                ),
+            },
+        )
+    )
+
+
+# Tag present only in client->device messages
+CLIENT_MESSAGE_TAG = b"\x00\xFF\x00\x00"
+
+
+@dataclass
+class Message(DataclassMixin):
+    _tag: bytes = csfield(
+        Rebuild(
+            Hex(Optional(Const(CLIENT_MESSAGE_TAG))),
+            lambda ctx: b"" if ctx.is_device_response else CLIENT_MESSAGE_TAG,
+        )
+    )
+    is_device_response: bool = csfield(
+        Computed(lambda ctx: ctx._tag is None or ctx._tag == b"")
+    )
+    _payload: Payload = csfield(RawCopy(DataclassStruct(Payload)))
+    payload: Payload = csfield(Computed(this._payload["value"]))
+    footer: int = csfield(
+        Switch(
+            lambda ctx: isinstance(ctx._payload["value"].message, OperationResult),
+            {
+                True: Switch(
+                    lambda ctx: ctx._payload["value"].message.is_success,
                     {
-                        ContentOperationResult.SUCCESS: Hex(Const(b"\x31")),
-                        ContentOperationResult.FAILURE: Hex(Const(b"\xCE")),
+                        True: Hex(Const(b"\x31")),
+                        False: Hex(Const(b"\xCE")),
                     },
                 ),
             },
             Checksum(
                 Int8ub,
                 xor_checksum,
-                this.payload.data,
+                this._payload["data"],
             ),
         )
     )
 
-
-@dataclass
-class ResponsePayload(DataclassMixin):
-    MESSAGE_TYPE_MAP = {
-        ResponseMessageType.REQUEST_BATTERY_STATUS: DataclassStruct(Battery),
-        ResponseMessageType.CHANGE_NAME: DataclassStruct(OperationResult),
-        ResponseMessageType.PASSWORD_CHANGE: DataclassStruct(OperationResult),
-        ResponseMessageType.PASSWORD: DataclassStruct(OperationResult),
-        ResponseMessageType.CONTROL_DIRECT: DataclassStruct(OperationResult),
-        ResponseMessageType.CONTROL_PERCENT: DataclassStruct(OperationResult),
-        ResponseMessageType.SEND_TIME: DataclassStruct(OperationResult),
-        ResponseMessageType.REQUEST_SETTINGS: DataclassBitStruct(SettingsResponse),
-        ResponseMessageType.LIST_TIMERS: DataclassStruct(FindTiming),
-        ResponseMessageType.UPDATE_TIMER: DataclassStruct(OperationResult),
-        ResponseMessageType.REQUEST_ILLUMINANCE: DataclassStruct(IlluminanceLevel),
-        ResponseMessageType.FINISHED_MOVING: DataclassStruct(FinishedMoving),
-        ResponseMessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrResetResult),
-        ResponseMessageType.LIST_SEASONS: DataclassStruct(Seasons),
-        ResponseMessageType.UPDATE_SEASON: DataclassStruct(OperationResult),
-        ResponseMessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
-    }
-
-    header: bytes = CommonFields.header
-    message_type: ResponseMessageType = csfield(TEnum(Int8ub, ResponseMessageType))
-    message_size: int = CommonFields.message_size
-    message: Any = CommonFields.message(MESSAGE_TYPE_MAP)
-
-
-@dataclass
-class Response(DataclassMixin):
-    payload: ResponsePayload = csfield(RawCopy(DataclassStruct(ResponsePayload)))
-    footer: Any = CommonFields.footer
-
-
-@dataclass
-class RequestPayload(DataclassMixin):
-    MESSAGE_TYPE_MAP = {
-        RequestMessageType.PASSWORD: DataclassStruct(Password),
-        RequestMessageType.PASSWORD_CHANGE: DataclassStruct(Password),
-        RequestMessageType.CHANGE_NAME: DataclassStruct(ChangeName),
-        RequestMessageType.CONTROL_DIRECT: DataclassStruct(DirectControl),
-        RequestMessageType.SEND_TIME: DataclassStruct(SendTime),
-        RequestMessageType.REQUEST_SETTINGS: DataclassStruct(AlwaysOne),
-        RequestMessageType.REQUEST_BATTERY_STATUS: DataclassStruct(AlwaysOne),
-        RequestMessageType.REQUEST_ILLUMINANCE: DataclassStruct(AlwaysOne),
-        RequestMessageType.UPDATE_TIMER: DataclassStruct(UpdateTimer),
-        RequestMessageType.CONTROL_PERCENT: DataclassStruct(PercentControl),
-        RequestMessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
-        RequestMessageType.UPDATE_SEASON: DataclassStruct(UpdateSeason),
-        RequestMessageType.UPDATE_SETTINGS: DataclassBitStruct(UpdateSettings),
-    }
-
-    header: bytes = CommonFields.header
-    message_type: RequestMessageType = csfield(TEnum(Int8ub, RequestMessageType))
-    message_size: int = CommonFields.message_size
-    message: Any = CommonFields.message(MESSAGE_TYPE_MAP)
-
-
-@dataclass
-class Request(DataclassMixin):
-    # Tag should be excluded from the checksum calculation
-    tag: bytes = csfield(Hex(Const(b"\x00\xFF\x00\x00")))
-    payload: RequestPayload = csfield(RawCopy(DataclassStruct(RequestPayload)))
-    footer: int = CommonFields.footer
-
     def prepare(
-        message_type: RequestMessageType = None,
-        payload: RequestPayload = None,
+        message_type: MessageType = None,
+        is_device_response: bool = False,
+        payload: Payload = None,
         message: Any = None,
         **kwargs,
-    ) -> "Request":
+    ) -> "Message":
         if payload is None:
             if message_type is None:
                 raise ValueError(
-                    "You must provide either payload, or message_type and message"
+                    "You must provide either payload, or message_type and message/kwargs"
                 )
 
-            klass = RequestPayload.MESSAGE_TYPE_MAP[message_type]
+            klass = (
+                Payload.RESPONSE_MESSAGE_TYPE_MAP[message_type]
+                if is_device_response
+                else Payload.REQUEST_MESSAGE_TYPE_MAP[message_type]
+            )
+
+            if klass.dc_type is AlwaysOne and message is None:
+                message = AlwaysOne()
+
             if message is not None:
                 if not isinstance(message, klass.dc_type):
                     raise ValueError(
                         "Message must be an instance of " + klass.dc_type.__class__
                     )
 
-                payload = RequestPayload(message_type=message_type, message=message)
+                payload = Payload(message_type=message_type, message=message)
             else:
-                payload = RequestPayload(
-                    message_type=message_type, message=klass.dc_type(**kwargs)
+                payload = Payload(
+                    message_type=message_type,
+                    message=klass.dc_type(**kwargs),
                 )
         elif message_type is not None or message is not None:
             raise ValueError(
                 "When payload is provided, message_type and message must be omited"
             )
 
-        return Request(payload={"value": payload})
+        msg = Message(_payload={"value": payload})
+        msg.payload = payload
+        msg.is_device_response = is_device_response
+        return msg
+
+
+message_format = DataclassStruct(Message)
