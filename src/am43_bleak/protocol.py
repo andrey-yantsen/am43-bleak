@@ -54,7 +54,7 @@ class MessageType(EnumBase):
     UPDATE_NAME = 0x35
     PASSWORD_CHANGE = 0x18
 
-    LIMIT_OR_RESET = 0x22  # TODO: Reset not tested / covered
+    UPDATE_LIMIT_OR_RESET = 0x22
 
     # Device notifications
     FINISHED_MOVING = 0xA1
@@ -82,16 +82,13 @@ class SeasonLightSwitchState(EnumBase):
     OPEN2OPEN_CLOSE2OPEN = 0x11
 
 
-class ContentLimitSet(EnumBase):
-    INIT_SUCCESS = 0x5A
+class ContentLimitSetOrReset(EnumBase):
+    LIMIT_INIT_SUCCESS = 0x5A
+    LIMIT_UPDATE_SUCCESS = 0x5B
+    RESET_SUCCESS = 0xC5
     TIMEOUT = 0xA5
     EXIT = 0x5C
-    SUCCESS = 0x5B
     FAILURE = 0xB5
-
-
-class ContentReset(EnumBase):
-    SUCCESS = 0xC5
 
 
 class ContentOperationResult(EnumBase):
@@ -285,20 +282,15 @@ class UpdateName(DataclassMixin):
 
 @dataclass
 class OperationResult(DataclassMixin):
-    _result: int = csfield(
-        Hex(
-            Select(
-                Const(b"\x5A"),
-                Const(b"\xA5"),
-            )
-        )
+    _result: int = csfield(TEnum(Int8ub, ContentOperationResult))
+    is_success: bool = csfield(
+        Computed(lambda ctx: ctx._result == ContentOperationResult.SUCCESS)
     )
-    is_success: bool = csfield(Computed(lambda ctx: ctx._result == b"\x5A"))
 
 
 @dataclass
 class BatteryStatusResponse(DataclassMixin):
-    unknown: int = csfield(Hex(Bytes(4)))  # looks like unused and always 0x00000000
+    _reserved: int = csfield(Default(Hex(Bytes(4)), 0))
     level: int = csfield(Int8ub)
 
 
@@ -309,14 +301,25 @@ class Password(DataclassMixin):
 
 @dataclass
 class FinishedMoving(DataclassMixin):
-    _reserved1: int = csfield(Hex(Bytes(1)))
+    _reserved1: int = csfield(Default(Hex(Bytes(1)), 0))
     position: int = csfield(Int8ub)
-    _reserved2: int = csfield(Hex(Bytes(2)))
+    _reserved2: int = csfield(Default(Hex(Bytes(2)), 0))
 
 
 @dataclass
-class LimitOrResetResponse(DataclassMixin):
-    result: int = csfield(TEnum(Int8ub, ContentLimitSet))
+class LimitOrResetResult(DataclassMixin):
+    _result: int = csfield(TEnum(Int8ub, ContentLimitSetOrReset))
+    is_success: bool = csfield(
+        Computed(
+            lambda ctx: ctx._result
+            in (
+                ContentLimitSetOrReset.LIMIT_INIT_SUCCESS,
+                ContentLimitSetOrReset.LIMIT_UPDATE_SUCCESS,
+                ContentLimitSetOrReset.RESET_SUCCESS,
+                ContentLimitSetOrReset.EXIT,
+            )
+        )
+    )
 
 
 class SeasonLightLevel(EnumBase):
@@ -375,7 +378,7 @@ class Payload(DataclassMixin):
         MessageType.REQUEST_ILLUMINANCE: DataclassStruct(AlwaysOne),
         MessageType.UPDATE_TIMER: DataclassStruct(UpdateTimer),
         MessageType.CONTROL_POSITION: DataclassStruct(PositionControl),
-        MessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
+        MessageType.UPDATE_LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
         MessageType.UPDATE_SEASON: DataclassStruct(UpdateSeason),
         MessageType.UPDATE_SETTINGS: DataclassBitStruct(UpdateSettings),
     }
@@ -393,7 +396,7 @@ class Payload(DataclassMixin):
         MessageType.UPDATE_TIMER: DataclassStruct(OperationResult),
         MessageType.REQUEST_ILLUMINANCE: DataclassStruct(IlluminanceLevel),
         MessageType.FINISHED_MOVING: DataclassStruct(FinishedMoving),
-        MessageType.LIMIT_OR_RESET: DataclassStruct(LimitOrResetResponse),
+        MessageType.UPDATE_LIMIT_OR_RESET: DataclassStruct(LimitOrResetResult),
         MessageType.LIST_SEASONS: DataclassStruct(ListSeasonsResponse),
         MessageType.UPDATE_SEASON: DataclassStruct(OperationResult),
         MessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
@@ -457,7 +460,8 @@ class Message(DataclassMixin):
     payload: Payload = csfield(Computed(this._payload["value"]))
     _footer: int = csfield(
         Switch(
-            lambda ctx: isinstance(ctx._payload["value"].message, OperationResult),
+            lambda ctx: isinstance(ctx._payload["value"].message, OperationResult)
+            or isinstance(ctx._payload["value"].message, LimitOrResetResult),
             {
                 True: Switch(
                     lambda ctx: ctx._payload["value"].message.is_success,
