@@ -28,9 +28,12 @@ target-version = ["py310"]
 python = "^3.10"
 bleak = "^0.20.0"
 bleak-retry-connector = "^3.0.1"
-home-assistant-bluetooth = "^1.9.3"
+home-assistant-bluetooth = { version = "^1.9.3", optional = true }
 construct = "^2.10.67"
 construct-typing = "^0.5.5"
+
+[tool.poetry.extras]
+home-assistant = ["home-assistant-bluetooth"]
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.1.0"
