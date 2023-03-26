@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, tzinfo
-from typing import Any
+import typing
 
 from construct import (
     Array,
@@ -194,33 +194,50 @@ class DeviceDiameter(EnumBase):
     DIAMETER_29MM = 29
 
 
+class DataclassBitMixin(DataclassMixin):
+    pass
+
+
 @dataclass
-class SettingsResponse(DataclassMixin):
-    _reserved1: int = csfield(Hex(BitsInteger(3)))
+class SettingsResponse(DataclassBitMixin):
+    _reserved1: int = csfield(Default(Hex(BitsInteger(3)), 0))
     has_light_device: bool = csfield(Flag)
     bottom_limit_is_ok: bool = csfield(Flag)
     top_limit_is_ok: bool = csfield(Flag)
     buttons_mode: int = csfield(TEnum(BitsInteger(1), ButtonsMode))
     direction: Direction = csfield(TEnum(BitsInteger(1), Direction))
-    speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
+    speed: int = csfield(BitsInteger(8))
     current_position: int = csfield(BitsInteger(8))
     length: int = csfield(BitsInteger(16))
     wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
-    _reserved2: int = csfield(Hex(BitsInteger(4)))
+    _reserved2: int = csfield(Default(Hex(BitsInteger(4)), 0))
 
 
 @dataclass
-class UpdateSettings(DataclassMixin):
+class UpdateSettings(DataclassBitMixin):
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
-    _reserved1: int = csfield(Hex(BitsInteger(1)))
+    _reserved1: int = csfield(Default(Hex(BitsInteger(1)), 0))
     buttons_mode: int = csfield(TEnum(BitsInteger(1), ButtonsMode))
     direction: Direction = csfield(TEnum(BitsInteger(1), Direction))
-    _reserved2: int = csfield(Hex(BitsInteger(1)))
+    _reserved2: int = csfield(Default(Hex(BitsInteger(1)), 0))
     speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
-    _reserved3: int = csfield(Hex(BitsInteger(8)))
+    _reserved3: int = csfield(Default(Hex(BitsInteger(8)), 0))
     length: int = csfield(BitsInteger(16))
     wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
+
+
+@dataclass
+class UpdateDeviceType(DataclassBitMixin):
+    device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
+    _reserved1: int = csfield(Default(Hex(BitsInteger(1)), 0))
+    buttons_mode: int = csfield(
+        Default(TEnum(BitsInteger(1), ButtonsMode), ButtonsMode.CONTINUOUS)
+    )
+    direction: Direction = csfield(
+        Default(TEnum(BitsInteger(1), Direction), Direction.REVERSE)
+    )
+    _reserved2: int = csfield(Default(Hex(BitsInteger(1)), 0))
 
 
 class TimerRepeat(FlagsEnumBase):
@@ -243,9 +260,9 @@ class Timer(DataclassMixin):
         ExprValidator(
             Transformed(
                 Int8ub,
-                lambda h: bytearray([ord(h) - 1]),
+                lambda h: bytearray([ord(h) - 1]) if h != b"\x00" else h,
                 1,
-                lambda h: bytearray([ord(h) + 1]),
+                lambda h: bytearray([ord(h) + 1]) if h != b"\x00" else h,
                 1,
             ),
             obj_ >= 0 and obj_ <= 23,
@@ -374,13 +391,20 @@ class Payload(DataclassMixin):
         MessageType.CONTROL_DIRECT: DataclassStruct(DirectControl),
         MessageType.UPDATE_DEVICE_TIME: DataclassStruct(UpdateDeviceTime),
         MessageType.REQUEST_SETTINGS: DataclassStruct(AlwaysOne),
-        MessageType.REQUEST_BATTERY_STATUS: DataclassStruct(AlwaysOne),
+        MessageType.REQUEST_BATTERY_STATUS: Select(
+            DataclassStruct(AlwaysOne), DataclassStruct(OperationResult)
+        ),
         MessageType.REQUEST_ILLUMINANCE: DataclassStruct(AlwaysOne),
         MessageType.UPDATE_TIMER: DataclassStruct(UpdateTimer),
         MessageType.CONTROL_POSITION: DataclassStruct(PositionControl),
         MessageType.UPDATE_LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
         MessageType.UPDATE_SEASON: DataclassStruct(UpdateSeason),
-        MessageType.UPDATE_SETTINGS: DataclassBitStruct(UpdateSettings),
+        MessageType.UPDATE_SETTINGS: Select(
+            DataclassBitStruct(UpdateSettings), DataclassBitStruct(UpdateDeviceType)
+        ),
+        MessageType.FINISHED_MOVING: DataclassStruct(OperationResult),
+        MessageType.SPEED: DataclassStruct(OperationResult),
+        MessageType.FAULT: DataclassStruct(OperationResult),
     }
 
     RESPONSE_MESSAGE_TYPE_MAP = {
@@ -408,13 +432,15 @@ class Payload(DataclassMixin):
         Rebuild(
             Int8ub,
             lambda ctx: len(
-                DataclassStruct(ctx.message.__class__).build(ctx.message)
+                DataclassBitStruct(ctx.message.__class__).build(ctx.message)
+                if isinstance(ctx.message, DataclassBitMixin)
+                else DataclassStruct(ctx.message.__class__).build(ctx.message)
                 if isinstance(ctx.message, DataclassMixin)
                 else ctx.message
             ),
         )
     )
-    message: Any = csfield(
+    message: typing.Any = csfield(
         Switch(
             lambda ctx: ctx._.is_device_response,
             {
@@ -482,8 +508,9 @@ class Message(DataclassMixin):
     def prepare(
         message_type: MessageType = None,
         is_device_response: bool = False,
+        operation_result: typing.Optional[bool] = None,
         payload: Payload = None,
-        message: Any = None,
+        message: typing.Any = None,
         **kwargs,
     ) -> "Message":
         if payload is None:
@@ -492,31 +519,73 @@ class Message(DataclassMixin):
                     "You must provide either payload, or message_type and message/kwargs"
                 )
 
-            klass = (
+            con = (
                 Payload.RESPONSE_MESSAGE_TYPE_MAP[message_type]
                 if is_device_response
                 else Payload.REQUEST_MESSAGE_TYPE_MAP[message_type]
             )
 
-            if klass.dc_type is AlwaysOne and message is None:
-                message = AlwaysOne()
+            allowed_message_classes = []
+
+            if isinstance(con, DataclassStruct):
+                allowed_message_classes.append(con.dc_type)
+            elif hasattr(con, "subcons"):
+                for subcon in con.subcons:
+                    if isinstance(subcon, DataclassStruct):
+                        allowed_message_classes.append(subcon.dc_type)
+                    elif hasattr(subcon, "subcon") and isinstance(
+                        subcon.subcon, DataclassStruct
+                    ):
+                        allowed_message_classes.append(subcon.subcon.dc_type)
+
+            if operation_result is not None:
+                if message is not None:
+                    raise ValueError(
+                        "Message must be omited, when providing operation_result"
+                    )
+
+                if OperationResult not in allowed_message_classes:
+                    raise ValueError(
+                        "Requested message does not support operation result"
+                    )
+
+            if message is None:
+                if operation_result is not None:
+                    message = OperationResult(
+                        ContentOperationResult.SUCCESS
+                        if operation_result
+                        else ContentOperationResult.FAILURE
+                    )
+                    message.is_success = operation_result
+
+                elif AlwaysOne in allowed_message_classes:
+                    message = AlwaysOne()
 
             if message is not None:
-                if not isinstance(message, klass.dc_type):
+                if message.__class__ not in allowed_message_classes:
                     raise ValueError(
-                        "Message must be an instance of " + klass.dc_type.__class__
+                        "Message must be an instance of "
+                        + "|".join([c.__name__ for c in allowed_message_classes])
                     )
 
                 payload = Payload(message_type=message_type, message=message)
             else:
                 payload = Payload(
                     message_type=message_type,
-                    message=klass.dc_type(**kwargs),
+                    message=con.dc_type(**kwargs),
                 )
         elif message_type is not None or message is not None:
             raise ValueError(
                 "When payload is provided, message_type and message must be omited"
             )
+
+        if isinstance(message, OperationResult) or isinstance(
+            message, LimitOrResetResult
+        ):
+            if message.is_success is None:
+                raise ValueError(
+                    "is_success must be set for messages OperationResult and LimitOrResetResult"
+                )
 
         msg = Message(_payload={"value": payload})
         msg.payload = payload
