@@ -188,7 +188,8 @@ class ButtonsMode(EnumBase):
     INCHING = 1
 
 
-class DeviceDiameter(EnumBase):
+class WheelGearDiameter(EnumBase):
+    UNSET = 0
     DIAMETER_13MM = 13
     DIAMETER_18MM = 18
     DIAMETER_29MM = 29
@@ -209,7 +210,9 @@ class SettingsResponse(DataclassBitMixin):
     speed: int = csfield(BitsInteger(8))
     current_position: int = csfield(BitsInteger(8))
     length: int = csfield(BitsInteger(16))
-    wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
+    wheel_gear_diameter: WheelGearDiameter = csfield(
+        TEnum(BitsInteger(8), WheelGearDiameter)
+    )
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
     _reserved2: int = csfield(Default(Hex(BitsInteger(4)), 0))
 
@@ -224,7 +227,9 @@ class UpdateSettings(DataclassBitMixin):
     speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
     _reserved3: int = csfield(Default(Hex(BitsInteger(8)), 0))
     length: int = csfield(BitsInteger(16))
-    wheel_gear_diameter: DeviceDiameter = csfield(TEnum(BitsInteger(8), DeviceDiameter))
+    wheel_gear_diameter: WheelGearDiameter = csfield(
+        TEnum(ExprValidator(BitsInteger(8), obj_ > 0), WheelGearDiameter)
+    )
 
 
 @dataclass
