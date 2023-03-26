@@ -505,7 +505,52 @@ class Message(DataclassMixin):
         )
     )
 
+    @classmethod
+    def __get_possible_message_classes(
+        cls,
+        message_type: MessageType = None,
+        is_device_response: bool = False,
+    ) -> list:
+        con = (
+            Payload.RESPONSE_MESSAGE_TYPE_MAP[message_type]
+            if is_device_response
+            else Payload.REQUEST_MESSAGE_TYPE_MAP[message_type]
+        )
+
+        ret = []
+
+        if isinstance(con, DataclassStruct):
+            ret.append(con.dc_type)
+        elif hasattr(con, "subcons"):
+            for subcon in con.subcons:
+                if isinstance(subcon, DataclassStruct):
+                    ret.append(subcon.dc_type)
+                elif hasattr(subcon, "subcon") and isinstance(
+                    subcon.subcon, DataclassStruct
+                ):
+                    ret.append(subcon.subcon.dc_type)
+
+        return ret
+
+    @property
+    def is_confirmation_expected(self) -> bool:
+        return OperationResult in self.__get_possible_message_classes(
+            self.payload.message_type, not self.is_device_response
+        )
+
+    def prepare_confirmation(self, is_success: bool) -> "Message":
+        if not self.is_confirmation_expected:
+            raise ValueError("Current message doesn't expect a confirmation")
+
+        return self.prepare(
+            message_type=self.payload.message_type,
+            is_device_response=not self.is_device_response,
+            operation_result=is_success,
+        )
+
+    @classmethod
     def prepare(
+        cls,
         message_type: MessageType = None,
         is_device_response: bool = False,
         operation_result: typing.Optional[bool] = None,
@@ -519,24 +564,9 @@ class Message(DataclassMixin):
                     "You must provide either payload, or message_type and message/kwargs"
                 )
 
-            con = (
-                Payload.RESPONSE_MESSAGE_TYPE_MAP[message_type]
-                if is_device_response
-                else Payload.REQUEST_MESSAGE_TYPE_MAP[message_type]
+            allowed_message_classes = cls.__get_possible_message_classes(
+                message_type, is_device_response
             )
-
-            allowed_message_classes = []
-
-            if isinstance(con, DataclassStruct):
-                allowed_message_classes.append(con.dc_type)
-            elif hasattr(con, "subcons"):
-                for subcon in con.subcons:
-                    if isinstance(subcon, DataclassStruct):
-                        allowed_message_classes.append(subcon.dc_type)
-                    elif hasattr(subcon, "subcon") and isinstance(
-                        subcon.subcon, DataclassStruct
-                    ):
-                        allowed_message_classes.append(subcon.subcon.dc_type)
 
             if operation_result is not None:
                 if message is not None:
@@ -557,7 +587,6 @@ class Message(DataclassMixin):
                         else ContentOperationResult.FAILURE
                     )
                     message.is_success = operation_result
-
                 elif AlwaysOne in allowed_message_classes:
                     message = AlwaysOne()
 
@@ -572,7 +601,7 @@ class Message(DataclassMixin):
             else:
                 payload = Payload(
                     message_type=message_type,
-                    message=con.dc_type(**kwargs),
+                    message=allowed_message_classes[0](**kwargs),
                 )
         elif message_type is not None or message is not None:
             raise ValueError(

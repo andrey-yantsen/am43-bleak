@@ -23,8 +23,8 @@ In general, the device looks like this:
   - [ ] Full protocol support
     - [ ] 0xA3 (Speed) notification
     - [ ] 0xA6 (Fault) notification
-    - [ ] Support for client-side messages without checksum
-    - [ ] Client-side confirmations for some of the messages
+    - [x] Support for client-side messages without checksum
+    - [x] Client-side confirmations for some of the messages
   - [ ] Documentation for everything
 - [ ] API Wrapper
   - [ ] Device discovery
