@@ -215,6 +215,14 @@ class SettingsResponse(DataclassBitMixin):
     )
     device_type: DeviceType = csfield(TEnum(BitsInteger(4), DeviceType))
     _reserved2: int = csfield(Default(Hex(BitsInteger(4)), 0))
+    is_fully_configures: bool = csfield(
+        Computed(
+            this.bottom_limit_is_ok
+            and this.top_limit_is_ok
+            and this.speed <= 50
+            and this.length > 0
+        )
+    )
 
 
 @dataclass
