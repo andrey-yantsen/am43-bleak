@@ -254,6 +254,7 @@ class UpdateDeviceType(DataclassBitMixin):
 
 
 class TimerRepeat(FlagsEnumBase):
+    NONE = 0x00
     SUNDAY = 0x01
     MONDAY = 0x02
     TUESDAY = 0x04
@@ -269,17 +270,18 @@ class Timer(DataclassMixin):
     target_position: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 100))
     repeat: TimerRepeat = csfield(TFlagsEnum(Int8ub, TimerRepeat))
     # Hours are stored on the devices incremented by 1
-    hours: int = csfield(
-        ExprValidator(
-            Transformed(
+    # hours=0 is a special value used when enabling/disabling a timer
+    _hours: int = csfield(
+        Rebuild(
+            ExprValidator(
                 Int8ub,
-                lambda h: bytearray([ord(h) - 1]) if h != b"\x00" else h,
-                1,
-                lambda h: bytearray([ord(h) + 1]) if h != b"\x00" else h,
-                1,
+                obj_ >= 0 and obj_ <= 24,
             ),
-            obj_ >= 0 and obj_ <= 23,
+            lambda ctx: 0 if ctx.hours is None else ctx.hours + 1,
         )
+    )
+    hours: int | None = csfield(
+        Computed(lambda ctx: None if ctx._hours == 0 else ctx._hours - 1)
     )
     minutes: int = csfield(ExprValidator(Int8ub, obj_ >= 0 and obj_ <= 59))
 
