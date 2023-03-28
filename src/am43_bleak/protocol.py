@@ -23,7 +23,6 @@ from construct import (
     Rebuild,
     Select,
     Switch,
-    Transformed,
     obj_,
     this,
 )
