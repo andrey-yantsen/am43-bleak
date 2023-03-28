@@ -10,6 +10,7 @@ from construct import (
     Computed,
     Const,
     Default,
+    Error,
     ExprValidator,
     Flag,
     Hex,
@@ -510,6 +511,7 @@ class Message(DataclassMixin):
                         True: Hex(Const(b"\x31")),
                         False: Hex(Const(b"\xCE")),
                     },
+                    Error,  # is_success value must be provided in the Result message
                 ),
             },
             Checksum(
