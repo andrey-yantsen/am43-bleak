@@ -21,7 +21,7 @@ jobs:
           monorepo-tags: true
           bump-minor-pre-major: true
           bump-patch-for-minor-pre-major: true
-          release-as: '0.0.1'
+          bootstrap-sha: "4b5c660e5c49070d968c0adcb40aa00ed03f7cea"
           changelog-types: |
             [{"type":"feat","section":"Features","hidden":false},
              {"type":"fix","section":"Bug Fixes","hidden":false},
@@ -47,13 +47,26 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/am43-bleak
-    if: ${{needs['release-please'].outputs.releases_created}}
+    if: ${{ needs['release-please'].outputs.releases_created }}
     steps:
       # The logic below handles the pypi publication:
       - name: Checkout sources
         uses: actions/checkout@v3
         # these if statements ensure that a publication only occurs when
         # a new release is created:
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: 'poetry'
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-root --no-ansi && poetry run python3 -m pip install build twine
+
+      - run: poetry run python3 -m build
 
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
