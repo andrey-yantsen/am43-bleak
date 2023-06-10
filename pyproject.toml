@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "am43-bleak"
-version = "0.1.0"
+version = "0.0.1"
 description = "Bluetooth library for AM43/Zemismart blinds"
 authors = ["Andrey Yantsen <andrey@janzen.su>"]
 license = "MIT"
