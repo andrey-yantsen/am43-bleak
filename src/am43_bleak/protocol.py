@@ -234,7 +234,7 @@ class UpdateSettings(DataclassBitMixin):
     _reserved2: int = csfield(Default(Hex(BitsInteger(1)), 0))
     speed: int = csfield(ExprValidator(BitsInteger(8), obj_ >= 20 and obj_ <= 50))
     _reserved3: int = csfield(Default(Hex(BitsInteger(8)), 0))
-    length: int = csfield(BitsInteger(16))
+    length: int = csfield(ExprValidator(BitsInteger(16), 0 <= obj_ <= 65535))
     wheel_gear_diameter: WheelGearDiameter = csfield(
         TEnum(ExprValidator(BitsInteger(8), obj_ > 0), WheelGearDiameter)
     )

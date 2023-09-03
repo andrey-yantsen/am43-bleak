@@ -18,8 +18,9 @@ In general, the device looks like this:
   - [x] Reading/updating timers
   - [x] Reading/updating seasons
   - [x] Reading battery status, blind position, illuminance levels
-  - [ ] Validation of the parameters
-  - [ ] Check if there're any changes in responses when connected to charger
+  - [x] Validation of the parameters
+  - [x] Check if there're any changes in responses when connected to charger
+    - Nothing
   - [ ] Full protocol support
     - [ ] 0xA3 (Speed) notification
     - [ ] 0xA6 (Fault) notification
