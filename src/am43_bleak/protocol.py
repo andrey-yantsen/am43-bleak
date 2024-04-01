@@ -442,16 +442,18 @@ class Payload(DataclassMixin):
     }
 
     _header: bytes = csfield(Hex(Const(b"\x9A")))
-    message_type: MessageType = csfield(TEnum(Int8ub, MessageType))
+    message_type: MessageType = csfield(Hex(TEnum(Int8ub, MessageType)))
     _message_size: int = csfield(
         Rebuild(
             Int8ub,
             lambda ctx: len(
                 DataclassBitStruct(ctx.message.__class__).build(ctx.message)
                 if isinstance(ctx.message, DataclassBitMixin)
-                else DataclassStruct(ctx.message.__class__).build(ctx.message)
-                if isinstance(ctx.message, DataclassMixin)
-                else ctx.message
+                else (
+                    DataclassStruct(ctx.message.__class__).build(ctx.message)
+                    if isinstance(ctx.message, DataclassMixin)
+                    else ctx.message
+                )
             ),
         )
     )
