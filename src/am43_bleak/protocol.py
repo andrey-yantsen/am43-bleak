@@ -57,11 +57,16 @@ class MessageType(EnumBase):
     UPDATE_LIMIT_OR_RESET = 0x22
 
     # Device notifications
-    FINISHED_MOVING = 0xA1
-    SPEED = 0xA3  # TODO: not implemented
     FAULT = 0xA6  # TODO: not implemented
     LIST_TIMERS = 0xA8
     LIST_SEASONS = 0xA9
+
+    # The purpose of the two following commands is unclear. Device does not
+    # provide any adequate response for these, apart from `OperationResult`
+    # with `message_type` set to `UNSPECIFIED`.
+    REQUEST_POSITION = 0xA1
+    REQUEST_SPEED = 0xA3
+    UNSPECIFIED = 0x00
 
 
 class ContentControlDirect(EnumBase):
@@ -332,13 +337,6 @@ class Password(DataclassMixin):
 
 
 @dataclass
-class FinishedMoving(DataclassMixin):
-    _reserved1: int = csfield(Default(Hex(Bytes(1)), 0))
-    position: int = csfield(Int8ub)
-    _reserved2: int = csfield(Default(Hex(Bytes(2)), 0))
-
-
-@dataclass
 class LimitOrResetResult(DataclassMixin):
     _result: int = csfield(TEnum(Int8ub, ContentLimitSetOrReset))
     is_success: bool = csfield(
@@ -410,6 +408,7 @@ class Payload(DataclassMixin):
             DataclassStruct(AlwaysOne), DataclassStruct(OperationResult)
         ),
         MessageType.REQUEST_ILLUMINANCE: DataclassStruct(AlwaysOne),
+        MessageType.REQUEST_POSITION: DataclassStruct(AlwaysOne),
         MessageType.UPDATE_TIMER: DataclassStruct(UpdateTimer),
         MessageType.CONTROL_POSITION: DataclassStruct(PositionControl),
         MessageType.UPDATE_LIMIT_OR_RESET: DataclassStruct(LimitOrReset),
@@ -417,8 +416,7 @@ class Payload(DataclassMixin):
         MessageType.UPDATE_SETTINGS: Select(
             DataclassBitStruct(UpdateSettings), DataclassBitStruct(UpdateDeviceType)
         ),
-        MessageType.FINISHED_MOVING: DataclassStruct(OperationResult),
-        MessageType.SPEED: DataclassStruct(OperationResult),
+        MessageType.REQUEST_SPEED: DataclassStruct(AlwaysOne),
         MessageType.FAULT: DataclassStruct(OperationResult),
     }
 
@@ -434,11 +432,11 @@ class Payload(DataclassMixin):
         MessageType.LIST_TIMERS: DataclassStruct(ListTimersResponse),
         MessageType.UPDATE_TIMER: DataclassStruct(OperationResult),
         MessageType.REQUEST_ILLUMINANCE: DataclassStruct(IlluminanceLevel),
-        MessageType.FINISHED_MOVING: DataclassStruct(FinishedMoving),
         MessageType.UPDATE_LIMIT_OR_RESET: DataclassStruct(LimitOrResetResult),
         MessageType.LIST_SEASONS: DataclassStruct(ListSeasonsResponse),
         MessageType.UPDATE_SEASON: DataclassStruct(OperationResult),
         MessageType.UPDATE_SETTINGS: DataclassStruct(OperationResult),
+        MessageType.UNSPECIFIED: DataclassStruct(OperationResult),
     }
 
     _header: bytes = csfield(Hex(Const(b"\x9A")))
