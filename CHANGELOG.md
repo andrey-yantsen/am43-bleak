@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.2](https://github.com/andrey-yantsen/am43-bleak/compare/am43-bleak-v0.0.1...am43-bleak-v0.0.2) (2024-04-01)
+
+
+### Features
+
+* implement the 0xA1 and 0xA3 commands ([abc5877](https://github.com/andrey-yantsen/am43-bleak/commit/abc5877002adf5d18de7627ca96f67c341553746))
+
+
+### Miscellaneous
+
+* **deps:** update the dependencies ([a4530fe](https://github.com/andrey-yantsen/am43-bleak/commit/a4530fe4fc2e9a95ee4f398d48fbba96e9e7f18e))
+* **deps:** update various dependencies ([2928eb5](https://github.com/andrey-yantsen/am43-bleak/commit/2928eb52cfac5d0e0fb38eea667f3b03a74d93e7))
+* wrap Payload.message_type with a Hex() ([33ec66e](https://github.com/andrey-yantsen/am43-bleak/commit/33ec66e6999db3cffecea4f3c1cff1561ff67aa6))
+
 ## 0.0.1 (2023-06-10)
 
 
