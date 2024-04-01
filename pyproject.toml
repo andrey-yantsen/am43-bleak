@@ -22,27 +22,27 @@ forced_separate = []
 combine_as_imports = true
 
 [tool.black]
-target-version = ["py310"]
+target-version = ["py311"]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
-bleak = "^0.21.0"
-bleak-retry-connector = "^3.1.1"
-home-assistant-bluetooth = { version = "^1.9.3", optional = true }
-construct = "^2.10.67"
-construct-typing = "^0.6.2"
-bluetooth-sensor-state-data = "^1.6.2"
-bluetooth-data-tools = "^1.6.0"
+python = ">=3.11,<3.13" # 3.13+ is not supported by bleak
+bleak = "^0.21"
+bleak-retry-connector = "^3.1"
+home-assistant-bluetooth = { version = "^1.12", optional = true }
+construct = "^2.10"
+construct-typing = "^0.6"
+bluetooth-sensor-state-data = "^1.6"
+bluetooth-data-tools = "^1.6"
 
 [tool.poetry.extras]
 home-assistant = ["home-assistant-bluetooth"]
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.1.0"
-isort = "^5.12.0"
-pytest = "^7.0"
-pytest-cov = "^4.0"
-pytest-asyncio = "^0.21.0"
+black = "^24.3"
+isort = "^5.12"
+pytest = "^8.1"
+pytest-cov = "^5.0"
+pytest-asyncio = "^0.23"
 
 [build-system]
 requires = ["poetry-core"]
